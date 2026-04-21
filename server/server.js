@@ -171,6 +171,7 @@ app.post('/api/print', async (req, res) => {
 
       const { data, info } = await thermalProcessor
         .resize(thermalWidth, thermalHeight, { fit: 'fill' })
+        .flatten({ background: { r: 255, g: 255, b: 255 } })
         .greyscale() // Convert to greyscale for processing
         .normalize() // Stretch contrast to full range
         .gamma(3.0)  // Darken mid-tones (essential for faint thermal prints)
