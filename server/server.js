@@ -36,8 +36,8 @@ const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff', 'image/webp'];
-    if (allowedTypes.includes(file.mimetype)) {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff', 'image/webp', 'image/heic', 'image/heif'];
+    if (allowedTypes.includes(file.mimetype) || file.originalname.toLowerCase().endsWith('.heic') || file.originalname.toLowerCase().endsWith('.heif')) {
       cb(null, true);
     } else {
       cb(new Error('Invalid file type. Only images are allowed.'));
@@ -59,20 +59,52 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'No image file provided' });
     }
 
+    // If it's a HEIC/HEIF file, convert it to JPEG for browser compatibility
+    let finalPath = req.file.path;
+    let finalFilename = req.file.filename;
+    let finalMimetype = req.file.mimetype;
+
+    if (req.file.mimetype === 'image/heic' || req.file.mimetype === 'image/heif' || req.file.filename.toLowerCase().endsWith('.heic') || req.file.filename.toLowerCase().endsWith('.heif')) {
+      try {
+        const jpegFilename = `${path.basename(req.file.filename, path.extname(req.file.filename))}.jpg`;
+        const jpegPath = path.join(uploadsDir, jpegFilename);
+        
+        console.log(`   🔄 Converting HEIC to JPEG: ${req.file.filename} -> ${jpegFilename}`);
+        
+        await sharp(req.file.path)
+          .toFormat('jpeg')
+          .toFile(jpegPath);
+        
+        // Remove original HEIC file
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+        
+        finalPath = jpegPath;
+        finalFilename = jpegFilename;
+        finalMimetype = 'image/jpeg';
+      } catch (convError) {
+        console.error('HEIC conversion error:', convError);
+        // If conversion fails, it might be due to missing libheif in sharp
+        return res.status(500).json({ 
+          error: 'HEIC format not supported by server', 
+          details: 'The server lacks the necessary libraries to process HEIC images. Please upload JPEG or PNG instead.' 
+        });
+      }
+    }
+
     // Get image metadata using sharp
-    const metadata = await sharp(req.file.path).metadata();
+    const metadata = await sharp(finalPath).metadata();
 
     res.json({
       success: true,
       file: {
-        id: path.basename(req.file.filename, path.extname(req.file.filename)),
-        filename: req.file.filename,
+        id: path.basename(finalFilename, path.extname(finalFilename)),
+        filename: finalFilename,
         originalName: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
+        size: fs.statSync(finalPath).size,
+        mimetype: finalMimetype,
         width: metadata.width,
         height: metadata.height,
-        url: `/uploads/${req.file.filename}`
+        url: `/uploads/${finalFilename}`
       }
     });
   } catch (error) {

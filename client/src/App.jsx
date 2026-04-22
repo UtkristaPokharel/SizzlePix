@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import heic2any from 'heic2any';
 import './App.css';
 
 const API_BASE = '';
@@ -72,15 +73,16 @@ function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // ============================================
-  // File Upload
-  // ============================================
   const handleFileUpload = useCallback(async (file) => {
     if (!file) return;
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      showToast('error', 'Invalid File', 'Please upload an image file (JPEG, PNG, GIF, BMP, TIFF, WebP)');
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff', 'image/webp', 'image/heic', 'image/heif'];
+    const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+    
+    console.log('Uploading file:', file.name, 'Type:', file.type);
+    
+    if (!allowedTypes.includes(file.type) && !isHeic) {
+      showToast('error', 'Invalid File', `File type "${file.type || 'unknown'}" is not supported. Please upload an image.`);
       return;
     }
 
@@ -89,11 +91,39 @@ function App() {
       return;
     }
 
+    let fileToUpload = file;
+    
+    // Convert HEIC to JPEG on client side
+    if (isHeic) {
+      showToast('info', 'Processing HEIC', 'Optimizing your image for printing...');
+      try {
+        const convertedBlob = await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: 0.9
+        });
+        
+        // Handle case where heic2any returns an array
+        const finalBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+        
+        // Create a new file object
+        fileToUpload = new File(
+          [finalBlob], 
+          file.name.replace(/\.(heic|heif)$/i, '.jpg'), 
+          { type: 'image/jpeg' }
+        );
+      } catch (err) {
+        console.error('Client-side HEIC conversion failed:', err);
+        showToast('error', 'HEIC Error', 'Could not process this HEIC file. Please try a different image.');
+        return;
+      }
+    }
+
     setUploading(true);
 
     try {
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append('image', fileToUpload);
 
       const res = await fetch(`${API_BASE}/api/upload`, {
         method: 'POST',
@@ -396,13 +426,13 @@ function App() {
                   )}
                 </button>
                 <div className="upload-formats">
-                  Supports JPEG, PNG, GIF, BMP, TIFF, WebP • Max 50MB
+                  Supports JPEG, PNG, HEIC, GIF, BMP, TIFF, WebP • Max 50MB
                 </div>
               </div>
-              <input
+                <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
                 id="file-input"
@@ -462,10 +492,10 @@ function App() {
                 </div>
               </div>
 
-              <input
+                <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
               />
