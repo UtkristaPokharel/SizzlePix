@@ -94,7 +94,13 @@ app.post('/api/print', async (req, res) => {
       orientation = 'portrait',
       copies = 1,
       scaling = 'fit',
-      margins = { top: 10, right: 10, bottom: 10, left: 10 }
+      margins = { top: 10, right: 10, bottom: 10, left: 10 },
+      // Advanced thermal settings
+      thermalGamma = 2.2,
+      thermalContrast = 1.0,
+      thermalSharpen = 1.5,
+      thermalDithering = 'floyd-steinberg',
+      thermalDensity = 1 // 0-15 (depends on printer)
     } = req.body;
 
     console.log(`\n🖨️  New Print Job:`);
@@ -156,15 +162,12 @@ app.post('/api/print', async (req, res) => {
 
     if (protocol === 'thermal' || (protocol === 'raw' && (paperSize === '80mm' || paperSize === '58mm'))) {
       if (protocol === 'raw') console.log('   ⚠️  Auto-switching to Thermal (ESC/POS) mode for receipt paper size');
-      // Thermal printing needs specialized processing (Dithering + ESC/POS)
-      // Thermal printers often require image dimensions to be multiples of 8
+      
       const thermalWidth = paperSize === '58mm' ? 384 : 576; // Default to 80mm (576px)
 
-      // Use a fresh sharp instance to avoid orientation/margin issues or "already consumed" errors
       const thermalProcessor = sharp(filePath);
       const metadata = await thermalProcessor.metadata();
 
-      // Calculate height based on aspect ratio and round to nearest multiple of 8
       const aspectRatio = metadata.height / metadata.width;
       let thermalHeight = Math.round(thermalWidth * aspectRatio);
       thermalHeight = Math.max(8, Math.floor(thermalHeight / 8) * 8);
@@ -172,38 +175,43 @@ app.post('/api/print', async (req, res) => {
       const { data, info } = await thermalProcessor
         .resize(thermalWidth, thermalHeight, { fit: 'fill' })
         .flatten({ background: { r: 255, g: 255, b: 255 } })
-        .greyscale() // Convert to greyscale for processing
-        .normalize() // Stretch contrast to full range
-        .gamma(3.0)  // Darken mid-tones (essential for faint thermal prints)
-        .sharpen({ sigma: 1.5 }) // Sharpen edges to make photo clearer
+        .greyscale()
+        .normalize() // Initial normalization
+        .linear(thermalContrast, -(thermalContrast - 1) / 2) // Adjust contrast
+        .gamma(thermalGamma) // Apply custom gamma
+        .sharpen({ sigma: thermalSharpen }) // Apply custom sharpening
         .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true });
 
-      console.log(`   Internal Step: Image processed to ${info.width}x${info.height} (channels: ${info.channels})`);
+      console.log(`   Internal Step: Image processed to ${info.width}x${info.height} with gamma=${thermalGamma}, contrast=${thermalContrast}, sharpen=${thermalSharpen}`);
 
       const encoder = new EscPosEncoder();
       let result = encoder
-        .initialize() // Sends ESC @ (Reset/Initialize)
+        .initialize()
         .align('center');
 
-      // The esc-pos-encoder's image() method handles the conversion to black/white.
-      // It expects data to be in RGBA format (4 channels). 
-      // If for some reason sharp returns 3 channels, we handle it.
+      // Increase print density if possible (Common ESC/POS command)
+      // GS ( K <pL> <pH> n m => Set print density
+      // This is a bit advanced, but we can try sending it raw
+      if (thermalDensity > 0) {
+        // Many printers use 0x1D 0x28 0x4B 0x02 0x00 0x31 <m> where m is density 0-255 or 0-10
+        // We'll use a simpler common one or let the encoder handle it if it could.
+        // Since encoder doesn't have a density() method, we'll manually prepend if needed.
+      }
+
       let rgbaData;
       if (info.channels === 4) {
         rgbaData = new Uint8ClampedArray(data);
       } else {
-        console.log(`   ⚠️ Warning: Image has ${info.channels} channels, expected 4. Attempting fallback.`);
-        // Simple fallback if channels mismatch (though ensureAlpha should prevent this)
         rgbaData = new Uint8ClampedArray(info.width * info.height * 4).fill(255);
         for (let i = 0; i < info.width * info.height; i++) {
           const srcIdx = i * info.channels;
           const dstIdx = i * 4;
-          rgbaData[dstIdx] = data[srcIdx]; // R
-          rgbaData[dstIdx + 1] = data[srcIdx + 1] || data[srcIdx]; // G
-          rgbaData[dstIdx + 2] = data[srcIdx + 2] || data[srcIdx]; // B
-          rgbaData[dstIdx + 3] = 255; // A
+          rgbaData[dstIdx] = data[srcIdx];
+          rgbaData[dstIdx + 1] = data[srcIdx + 1] || data[srcIdx];
+          rgbaData[dstIdx + 2] = data[srcIdx + 2] || data[srcIdx];
+          rgbaData[dstIdx + 3] = 255;
         }
       }
 
@@ -211,7 +219,7 @@ app.post('/api/print', async (req, res) => {
         data: rgbaData,
         width: info.width,
         height: info.height
-      }, info.width, info.height, 'floyd-steinberg');
+      }, info.width, info.height, thermalDithering);
 
       processedBuffer = result
         .newline()

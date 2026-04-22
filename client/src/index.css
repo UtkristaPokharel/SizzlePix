@@ -489,6 +489,13 @@ h1, h2, h3, h4, h5, h6 {
   gap: 6px;
 }
 
+.form-help {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 4px;
+}
+
 .form-label {
   font-size: 12px;
   font-weight: 500;
@@ -550,18 +557,6 @@ h1, h2, h3, h4, h5, h6 {
 .form-select option {
   background: var(--bg-card);
   color: var(--text-primary);
-}
-
-.form-range-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-range-label {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
 .form-range {

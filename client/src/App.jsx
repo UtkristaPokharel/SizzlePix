@@ -21,6 +21,12 @@ function App() {
   const [scaling, setScaling] = useState('fit');
   const [margins, setMargins] = useState({ top: 10, right: 10, bottom: 10, left: 10 });
 
+  // Thermal quality settings
+  const [thermalGamma, setThermalGamma] = useState(3.0);
+  const [thermalContrast, setThermalContrast] = useState(1.0);
+  const [thermalSharpen, setThermalSharpen] = useState(1.5);
+  const [thermalDithering, setThermalDithering] = useState('floyd-steinberg');
+
   // Print jobs
   const [printJobs, setPrintJobs] = useState([]);
 
@@ -29,6 +35,7 @@ function App() {
     printer: true,
     page: true,
     copies: true,
+    advanced: false,
     jobs: true
   });
 
@@ -207,7 +214,11 @@ function App() {
           orientation,
           copies,
           scaling,
-          margins
+          margins,
+          thermalGamma,
+          thermalContrast,
+          thermalSharpen,
+          thermalDithering
         }),
       });
 
@@ -226,7 +237,7 @@ function App() {
     } finally {
       setPrinting(false);
     }
-  }, [uploadedFile, printerIp, printerPort, protocol, paperSize, orientation, copies, scaling, margins, showToast]);
+  }, [uploadedFile, printerIp, printerPort, protocol, paperSize, orientation, copies, scaling, margins, thermalGamma, thermalContrast, thermalSharpen, thermalDithering, showToast]);
 
   // ============================================
   // Fetch Jobs
@@ -589,7 +600,6 @@ function App() {
                     className="copies-btn"
                     onClick={() => setCopies(c => Math.max(1, c - 1))}
                     disabled={copies <= 1}
-                    id="copies-minus"
                   >
                     −
                   </button>
@@ -598,10 +608,73 @@ function App() {
                     className="copies-btn"
                     onClick={() => setCopies(c => Math.min(99, c + 1))}
                     disabled={copies >= 99}
-                    id="copies-plus"
                   >
                     +
                   </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Advanced Printing */}
+          <div className="sidebar-card">
+            <div className="sidebar-card-header" onClick={() => toggleSection('advanced')}>
+              <h3>⚙️ Advanced Printing</h3>
+              <span className={`chevron ${openSections.advanced ? 'open' : ''}`}>▼</span>
+            </div>
+            {openSections.advanced && (
+              <div className="sidebar-card-body">
+                <div className="form-group">
+                  <label className="form-label">Intensity: {thermalGamma.toFixed(1)}</label>
+                  <input
+                    type="range"
+                    className="form-range"
+                    min="0.5"
+                    max="5.0"
+                    step="0.1"
+                    value={thermalGamma}
+                    onChange={(e) => setThermalGamma(parseFloat(e.target.value))}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Contrast: {thermalContrast.toFixed(1)}</label>
+                  <input
+                    type="range"
+                    className="form-range"
+                    min="0.5"
+                    max="2.5"
+                    step="0.1"
+                    value={thermalContrast}
+                    onChange={(e) => setThermalContrast(parseFloat(e.target.value))}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Sharpness: {thermalSharpen.toFixed(1)}</label>
+                  <input
+                    type="range"
+                    className="form-range"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    value={thermalSharpen}
+                    onChange={(e) => setThermalSharpen(parseFloat(e.target.value))}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Dithering</label>
+                  <select
+                    className="form-select"
+                    value={thermalDithering}
+                    onChange={(e) => setThermalDithering(e.target.value)}
+                  >
+                    <option value="floyd-steinberg">Smooth</option>
+                    <option value="atkinson">Atkinson (Sharp)</option>
+                    <option value="bayer">Bayer</option>
+                    <option value="threshold">B&W Only</option>
+                  </select>
                 </div>
               </div>
             )}
