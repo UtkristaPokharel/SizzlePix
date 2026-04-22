@@ -36,8 +36,14 @@ function App() {
     page: true,
     copies: true,
     advanced: false,
-    jobs: true
+    jobs: true,
+    converter: true
   });
+
+  const [activeTab, setActiveTab] = useState('print'); // 'print' or 'convert'
+  const [convertFormat, setConvertFormat] = useState('png');
+  const [convertQuality, setConvertQuality] = useState(90);
+  const [converting, setConverting] = useState(false);
 
   // Toasts
   const [toasts, setToasts] = useState([]);
@@ -240,6 +246,68 @@ function App() {
   }, [uploadedFile, printerIp, printerPort, protocol, paperSize, orientation, copies, scaling, margins, thermalGamma, thermalContrast, thermalSharpen, thermalDithering, showToast]);
 
   // ============================================
+  // Image Converter
+  // ============================================
+  const handleConvert = useCallback(async () => {
+    if (!uploadedFile) {
+      showToast('warning', 'No Image', 'Please upload an image first');
+      return;
+    }
+
+    setConverting(true);
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      // Use the local URL for the image
+      img.src = `${API_BASE}${uploadedFile.url}`;
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error("Failed to load image for conversion"));
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      let mimeType = `image/${convertFormat}`;
+      // Special case for formats
+      if (convertFormat === 'jpg') mimeType = 'image/jpeg';
+
+      const quality = convertQuality / 100;
+      
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          throw new Error("Failed to create image blob");
+        }
+        
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const baseName = uploadedFile.originalName.replace(/\.[^/.]+$/, "");
+        link.download = `${baseName}.${convertFormat}`;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        
+        // Cleanup
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          setConverting(false);
+          showToast('success', 'Conversion Success', `Downloaded as ${convertFormat.toUpperCase()}`);
+        }, 100);
+      }, mimeType, quality);
+
+    } catch (error) {
+      showToast('error', 'Conversion Failed', error.message);
+      setConverting(false);
+    }
+  }, [uploadedFile, convertFormat, convertQuality, showToast]);
+
+  // ============================================
   // Fetch Jobs
   // ============================================
   const fetchJobs = useCallback(async () => {
@@ -370,6 +438,13 @@ function App() {
                   alt={uploadedFile.originalName}
                   className={orientation === 'landscape' ? 'landscape' : ''}
                 />
+                {activeTab === 'convert' && (
+                  <div className="preview-overlay">
+                    <div className="conversion-badge">
+                      CONVERSION MODE: {convertFormat.toUpperCase()}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="preview-info">
@@ -398,9 +473,27 @@ function App() {
           )}
         </main>
 
-        {/* Sidebar - Print Settings */}
+        {/* Sidebar - Tools */}
         <aside className="sidebar" id="print-settings">
-          {/* Printer Configuration */}
+          {/* Tab Switcher */}
+          <div className="tab-switcher">
+            <button
+              className={`tab-btn ${activeTab === 'print' ? 'active' : ''}`}
+              onClick={() => setActiveTab('print')}
+            >
+              🖨️ Printer
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'convert' ? 'active' : ''}`}
+              onClick={() => setActiveTab('convert')}
+            >
+              🔄 Converter
+            </button>
+          </div>
+
+          {activeTab === 'print' ? (
+            <>
+              {/* Printer Configuration */}
           <div className="sidebar-card">
             <div className="sidebar-card-header" onClick={() => toggleSection('printer')}>
               <h3>🖨️ Printer</h3>
@@ -693,9 +786,85 @@ function App() {
               <>🖨️ Print Photo</>
             )}
           </button>
-
-          {/* Print Jobs */}
+        </>
+      ) : (
+        <>
+          {/* Image Converter */}
           <div className="sidebar-card">
+            <div className="sidebar-card-header" onClick={() => toggleSection('converter')}>
+              <h3>🔄 Image Converter</h3>
+              <span className={`chevron ${openSections.converter ? 'open' : ''}`}>▼</span>
+            </div>
+            {openSections.converter && (
+              <div className="sidebar-card-body">
+                <div className="form-group">
+                  <label className="form-label">Target Format</label>
+                  <select
+                    className="form-select"
+                    value={convertFormat}
+                    onChange={(e) => setConvertFormat(e.target.value)}
+                    id="convert-format-select"
+                  >
+                    <option value="png">PNG (Lossless)</option>
+                    <option value="jpg">JPEG (Compressed)</option>
+                    <option value="webp">WebP (Modern)</option>
+                    <option value="bmp">BMP (Windows)</option>
+                  </select>
+                  <p className="form-help">
+                    {convertFormat === 'png' && "Best for graphics and transparent images."}
+                    {convertFormat === 'jpg' && "Best for photos and small file sizes."}
+                    {convertFormat === 'webp' && "Excellent compression with high quality."}
+                    {convertFormat === 'bmp' && "Uncompressed legacy format."}
+                  </p>
+                </div>
+
+                {(convertFormat === 'jpg' || convertFormat === 'webp') && (
+                  <div className="form-group">
+                    <label className="form-label">Quality: {convertQuality}%</label>
+                    <input
+                      type="range"
+                      className="form-range"
+                      min="10"
+                      max="100"
+                      step="1"
+                      value={convertQuality}
+                      onChange={(e) => setConvertQuality(parseInt(e.target.value))}
+                    />
+                  </div>
+                )}
+
+                <div className="converter-info">
+                  <div className="info-badge">
+                    <span>Current:</span>
+                    <strong>{uploadedFile?.mimetype?.split('/')[1]?.toUpperCase() || 'NONE'}</strong>
+                  </div>
+                  <div className="info-arrow">➜</div>
+                  <div className="info-badge highlight">
+                    <span>Target:</span>
+                    <strong>{convertFormat.toUpperCase()}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            className="btn btn-primary btn-print"
+            onClick={handleConvert}
+            disabled={!uploadedFile || converting}
+            id="convert-btn"
+          >
+            {converting ? (
+              <><div className="spinner"></div> Converting...</>
+            ) : (
+              <>🔄 Convert & Download</>
+            )}
+          </button>
+        </>
+      )}
+
+      {/* Print Jobs */}
+      <div className="sidebar-card">
             <div className="sidebar-card-header" onClick={() => toggleSection('jobs')}>
               <h3>📃 Print Jobs</h3>
               <span className={`chevron ${openSections.jobs ? 'open' : ''}`}>▼</span>

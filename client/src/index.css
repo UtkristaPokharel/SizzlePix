@@ -1047,3 +1047,127 @@ h1, h2, h3, h4, h5, h6 {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* =========================================
+   Tab Switcher
+   ========================================= */
+
+.tab-switcher {
+  display: flex;
+  background: var(--bg-input);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tab-btn.active {
+  background: var(--bg-card);
+  color: var(--accent-primary-light);
+  box-shadow: var(--shadow-sm);
+}
+
+/* =========================================
+   Converter Info
+   ========================================= */
+
+.converter-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.info-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.info-badge span {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.info-badge strong {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.info-badge.highlight strong {
+  color: var(--accent-primary-light);
+}
+
+.info-arrow {
+  font-size: 18px;
+  color: var(--text-muted);
+  animation: pulseArrow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseArrow {
+  0%, 100% { transform: translateX(0); opacity: 0.5; }
+  50% { transform: translateX(4px); opacity: 1; }
+}
+
+/* =========================================
+   Preview Overlays
+   ========================================= */
+
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px;
+  pointer-events: none;
+  background: radial-gradient(circle at center, transparent 0%, rgba(10, 10, 15, 0.4) 100%);
+}
+
+.conversion-badge {
+  background: var(--accent-gradient);
+  color: white;
+  padding: 8px 20px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: slideDownFade 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes slideDownFade {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
