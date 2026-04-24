@@ -46,13 +46,6 @@ function App() {
 
   const fileInputRef = useRef(null);
 
-  // Save printer config to localStorage
-  useEffect(() => {
-    if (printerIp) localStorage.setItem('printerIp', printerIp);
-    if (printerPort) localStorage.setItem('printerPort', printerPort);
-    if (protocol) localStorage.setItem('protocol', protocol);
-  }, [printerIp, printerPort, protocol]);
-
   // ============================================
   // Toast System
   // ============================================
@@ -64,8 +57,78 @@ function App() {
     }, 5000);
   }, []);
 
+  // Saved Printers Logic
+  const [savedPrinters, setSavedPrinters] = useState(() => {
+    const saved = localStorage.getItem('savedPrinters');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const savePrinterProfile = useCallback(() => {
+    const name = prompt("Enter a name for this printer profile (e.g., Thermal, Canon):");
+    if (!name) return;
+
+    const newProfile = {
+      name,
+      printerIp,
+      printerPort,
+      protocol,
+      paperSize,
+      orientation,
+      thermalGamma,
+      thermalContrast,
+      thermalSharpen,
+      thermalDithering
+    };
+
+    const updated = [...savedPrinters.filter(p => p.name !== name), newProfile];
+    setSavedPrinters(updated);
+    localStorage.setItem('savedPrinters', JSON.stringify(updated));
+    showToast('success', 'Profile Saved', `Printer profile "${name}" has been saved.`);
+  }, [printerIp, printerPort, protocol, paperSize, orientation, thermalGamma, thermalContrast, thermalSharpen, thermalDithering, savedPrinters, showToast]);
+
+  const loadPrinterProfile = useCallback((profile) => {
+    setPrinterIp(profile.printerIp);
+    setPrinterPort(profile.printerPort || (profile.protocol === 'ipp' ? '631' : '9100'));
+    setProtocol(profile.protocol);
+    if (profile.paperSize) setPaperSize(profile.paperSize);
+    if (profile.orientation) setOrientation(profile.orientation);
+    if (profile.thermalGamma) setThermalGamma(profile.thermalGamma);
+    if (profile.thermalContrast) setThermalContrast(profile.thermalContrast);
+    if (profile.thermalSharpen) setThermalSharpen(profile.thermalSharpen);
+    if (profile.thermalDithering) setThermalDithering(profile.thermalDithering);
+    showToast('info', 'Profile Loaded', `Switched to "${profile.name}"`);
+  }, [showToast]);
+
+  const deleteProfile = useCallback((e, name) => {
+    e.stopPropagation();
+    const updated = savedPrinters.filter(p => p.name !== name);
+    setSavedPrinters(updated);
+    localStorage.setItem('savedPrinters', JSON.stringify(updated));
+    showToast('info', 'Profile Deleted', `Removed "${name}"`);
+  }, [savedPrinters, showToast]);
+
+  // Save printer config to localStorage
+  useEffect(() => {
+    if (printerIp) localStorage.setItem('printerIp', printerIp);
+    if (printerPort) localStorage.setItem('printerPort', printerPort);
+    if (protocol) localStorage.setItem('protocol', protocol);
+  }, [printerIp, printerPort, protocol]);
+
   const removeToast = useCallback((id) => {
     setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  // ============================================
+  // Fetch Jobs
+  // ============================================
+  const fetchJobs = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/jobs`);
+      const data = await res.json();
+      setPrintJobs(data);
+    } catch (err) {
+      console.error('Failed to fetch jobs:', err);
+    }
   }, []);
 
   const handleFileUpload = useCallback(async (file) => {
@@ -171,8 +234,8 @@ function App() {
 
     try {
       await fetch(`${API_BASE}/api/upload/${uploadedFile.filename}`, { method: 'DELETE' });
-    } catch (_) {
-      // Ignore errors on cleanup
+    } catch (err) {
+      console.error('Delete failed:', err);
     }
 
     setUploadedFile(null);
@@ -268,7 +331,7 @@ function App() {
     } finally {
       setPrinting(false);
     }
-  }, [uploadedFile, printerIp, printerPort, protocol, paperSize, orientation, copies, scaling, margins, thermalGamma, thermalContrast, thermalSharpen, thermalDithering, showToast]);
+  }, [uploadedFile, printerIp, printerPort, protocol, paperSize, orientation, copies, scaling, margins, thermalGamma, thermalContrast, thermalSharpen, thermalDithering, showToast, fetchJobs]);
 
   // ============================================
   // Image Converter
@@ -331,19 +394,6 @@ function App() {
       setConverting(false);
     }
   }, [uploadedFile, convertFormat, convertQuality, showToast]);
-
-  // ============================================
-  // Fetch Jobs
-  // ============================================
-  const fetchJobs = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/jobs`);
-      const data = await res.json();
-      setPrintJobs(data);
-    } catch (_) {
-      // Silently fail
-    }
-  }, []);
 
   useEffect(() => {
     fetchJobs();
@@ -526,6 +576,41 @@ function App() {
             </div>
             {openSections.printer && (
               <div className="sidebar-card-body">
+                {/* Saved Profiles */}
+                {savedPrinters.length > 0 && (
+                  <div className="form-group mb-3">
+                    <label className="form-label">Quick Select</label>
+                    <div className="saved-printers-list">
+                      {savedPrinters.map(p => (
+                        <div key={p.name} className="saved-printer-item">
+                          <button 
+                            className={`btn btn-secondary btn-sm ${printerIp === p.printerIp && protocol === p.protocol ? 'active' : ''}`}
+                            onClick={() => loadPrinterProfile(p)}
+                            title={`Load ${p.name}`}
+                          >
+                            {p.name}
+                          </button>
+                          <button 
+                            className="delete-profile-btn" 
+                            onClick={(e) => deleteProfile(e, p.name)}
+                            title="Delete profile"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <button 
+                  className="btn btn-secondary btn-sm mb-3" 
+                  onClick={savePrinterProfile}
+                  title="Save current configuration as a preset"
+                >
+                  💾 Save Current Settings
+                </button>
+
                 <div className="form-group">
                   <label className="form-label">{protocol === 'system' ? 'Printer Queue Name (System)' : 'Printer IP Address'}</label>
                   <input
