@@ -5,14 +5,12 @@ import './App.css';
 const API_BASE = '';
 
 function App() {
-  // State
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [testingPrinter, setTestingPrinter] = useState(false);
 
-  // Print settings
   const [printerIp, setPrinterIp] = useState(localStorage.getItem('printerIp') || '');
   const [printerPort, setPrinterPort] = useState(localStorage.getItem('printerPort') || '631');
   const [protocol, setProtocol] = useState(localStorage.getItem('protocol') || 'ipp');
@@ -22,16 +20,13 @@ function App() {
   const [scaling, setScaling] = useState('fit');
   const [margins, setMargins] = useState({ top: 10, right: 10, bottom: 10, left: 10 });
 
-  // Thermal quality settings
   const [thermalGamma, setThermalGamma] = useState(3.0);
   const [thermalContrast, setThermalContrast] = useState(1.0);
   const [thermalSharpen, setThermalSharpen] = useState(1.5);
   const [thermalDithering, setThermalDithering] = useState('floyd-steinberg');
 
-  // Print jobs
   const [printJobs, setPrintJobs] = useState([]);
 
-  // Section toggles
   const [openSections, setOpenSections] = useState({
     printer: true,
     page: true,
@@ -532,11 +527,11 @@ function App() {
             {openSections.printer && (
               <div className="sidebar-card-body">
                 <div className="form-group">
-                  <label className="form-label">Printer IP Address</label>
+                  <label className="form-label">{protocol === 'system' ? 'Printer Queue Name (System)' : 'Printer IP Address'}</label>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. 192.168.1.100"
+                    placeholder={protocol === 'system' ? 'e.g. Canon_MF4700_Series' : 'e.g. 192.168.1.100'}
                     value={printerIp}
                     onChange={(e) => setPrinterIp(e.target.value)}
                     id="printer-ip-input"
@@ -563,6 +558,7 @@ function App() {
                       <option value="ipp">IPP</option>
                       <option value="raw">RAW (9100)</option>
                       <option value="thermal">Thermal (ESC/POS)</option>
+                      <option value="system">System Printer (CUPS/OS)</option>
                     </select>
                   </div>
 

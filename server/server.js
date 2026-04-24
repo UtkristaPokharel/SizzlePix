@@ -268,7 +268,13 @@ app.post('/api/print', async (req, res) => {
     }
 
     // Try printing based on protocol
-    if (protocol === 'raw' || protocol === 'thermal') {
+    if (protocol === 'system') {
+      try {
+        await printSystem(printerIp, processedBuffer, jobId, { copies });
+      } catch (sysErr) {
+        throw new Error(`System printing failed: ${sysErr.message}`);
+      }
+    } else if (protocol === 'raw' || protocol === 'thermal') {
       // RAW or Thermal protocol (direct socket)
       try {
         await printRaw(printerIp, printerPort || 9100, processedBuffer, jobId);
@@ -329,6 +335,13 @@ app.post('/api/test-printer', async (req, res) => {
   try {
     if (protocol === 'raw') {
       await testRawConnection(printerIp, printerPort || 9100);
+    } else if (protocol === 'system') {
+      await new Promise((resolve, reject) => {
+        require('child_process').execFile('lpstat', ['-p', printerIp], (error) => {
+          if (error) reject(new Error(`System printer "${printerIp}" not found`));
+          else resolve();
+        });
+      });
     } else {
       await testIPPConnection(printerIp, printerPort || 631);
     }
@@ -355,6 +368,34 @@ app.delete('/api/upload/:filename', (req, res) => {
 // ============================================
 // PRINTING FUNCTIONS
 // ============================================
+
+// Print via System OS (CUPS/lp)
+function printSystem(printerName, buffer, jobId, options) {
+  return new Promise((resolve, reject) => {
+    const tempFilePath = path.join(uploadsDir, `temp_${jobId}.jpg`);
+    fs.writeFileSync(tempFilePath, buffer);
+    
+    printJobs.set(jobId, { ...printJobs.get(jobId), status: 'sending' });
+    
+    const args = ['-d', printerName];
+    if (options.copies > 1) {
+      args.push('-n', options.copies.toString());
+    }
+    args.push(tempFilePath);
+    
+    require('child_process').execFile('lp', args, (error, stdout, stderr) => {
+      try { fs.unlinkSync(tempFilePath); } catch (e) {}
+      
+      if (error) {
+        printJobs.set(jobId, { ...printJobs.get(jobId), status: 'failed', error: stderr || error.message });
+        reject(error);
+      } else {
+        printJobs.set(jobId, { ...printJobs.get(jobId), status: 'completed', completedAt: new Date().toISOString(), printerResponse: stdout });
+        resolve(stdout);
+      }
+    });
+  });
+}
 
 // Get paper dimensions at 300 DPI
 function getPaperDimensions(paperSize, orientation) {
